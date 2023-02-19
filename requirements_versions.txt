@@ -28,3 +28,10 @@ torchsde==0.2.5
 safetensors==0.2.7
 httpcore<=0.15
 fastapi==0.90.1
+decorator==4.0.2
+moviepy
+opencv-python
+ffmpeg-python
+imageio_ffmpeg
+--pre
+xformers

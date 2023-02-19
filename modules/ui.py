@@ -723,6 +723,10 @@ def create_ui():
                         )
                         img2img_batch_input_dir = gr.Textbox(label="Input directory", **shared.hide_dirs, elem_id="img2img_batch_input_dir")
                         img2img_batch_output_dir = gr.Textbox(label="Output directory", **shared.hide_dirs, elem_id="img2img_batch_output_dir")
+                        img2img_batch_input_video = gr.Video(label="Input video", **shared.hide_dirs, elem_id="img2img_batch_video")
+                        start_time = gr.Number(label='Start Time', value=0, precision=0, elem_id="img2img_batch_start_time")
+                        target_duration = gr.Number(label='Target Duration', value=-1, precision=0, elem_id="img2img_batch_target_duration")
+                        target_fps = gr.Number(label='Target FPS', value=30, precision=0, elem_id="img2img_batch_target_fps")
                         img2img_batch_inpaint_mask_dir = gr.Textbox(label="Inpaint batch mask directory (required for inpaint batch processing only)", **shared.hide_dirs, elem_id="img2img_batch_inpaint_mask_dir")
 
                 def copy_image(img):
@@ -875,6 +879,10 @@ def create_ui():
                     inpainting_mask_invert,
                     img2img_batch_input_dir,
                     img2img_batch_output_dir,
+                    img2img_batch_input_video,
+                    start_time,
+                    target_duration,
+                    target_fps,
                     img2img_batch_inpaint_mask_dir,
                     override_settings,
                 ] + custom_inputs,

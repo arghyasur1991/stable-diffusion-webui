@@ -1,7 +1,10 @@
 import math
 import os
+import cv2
+import shutil
 import sys
 import traceback
+from moviepy.editor import *
 
 import numpy as np
 from PIL import Image, ImageOps, ImageFilter, ImageEnhance, ImageChops
@@ -18,9 +21,13 @@ import modules.scripts
 
 
 def process_batch(p, input_dir, output_dir, inpaint_mask_dir, args):
-    processing.fix_seed(p)
-
     images = shared.listfiles(input_dir)
+    return process_batch(p, images, output_dir, inpaint_mask_dir, args)
+
+
+def process_batch(p, images, output_dir, inpaint_mask_dir, args):
+    processing.fix_seed(p)
+    result_frames = []
 
     is_inpaint_batch = False
     if inpaint_mask_dir:
@@ -73,10 +80,65 @@ def process_batch(p, input_dir, output_dir, inpaint_mask_dir, args):
 
             if not save_normally:
                 os.makedirs(output_dir, exist_ok=True)
-                processed_image.save(os.path.join(output_dir, filename))
+                result_file = os.path.join(output_dir, filename)
+                result_frames.append(result_file)
+                processed_image.save(result_file)
+    return result_frames
 
 
-def img2img(id_task: str, mode: int, prompt: str, negative_prompt: str, prompt_styles, init_img, sketch, init_img_with_mask, inpaint_color_sketch, inpaint_color_sketch_orig, init_img_inpaint, init_mask_inpaint, steps: int, sampler_index: int, mask_blur: int, mask_alpha: float, inpainting_fill: int, restore_faces: bool, tiling: bool, n_iter: int, batch_size: int, cfg_scale: float, image_cfg_scale: float, denoising_strength: float, seed: int, subseed: int, subseed_strength: float, seed_resize_from_h: int, seed_resize_from_w: int, seed_enable_extras: bool, height: int, width: int, resize_mode: int, inpaint_full_res: bool, inpaint_full_res_padding: int, inpainting_mask_invert: int, img2img_batch_input_dir: str, img2img_batch_output_dir: str, img2img_batch_inpaint_mask_dir: str, override_settings_texts, *args):
+def get_frames(video_in, frame_size, output_dir, start_time, target_duration, target_fps):
+    # shutil.rmtree(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
+    frames = []
+
+    # resize the video
+    clip = VideoFileClip(video_in)
+
+    clip_resized = clip.resize(height=frame_size)
+    max_frames = -1
+    if target_duration != -1:
+        clip_resized = clip_resized.subclip(start_time, start_time + target_duration)
+        max_frames = target_duration * clip.fps
+    print(output_dir)
+    fps = target_fps if (clip.fps > target_fps) else clip.fps
+    clip_resized.write_videofile(output_dir + "video_resized.mp4", fps=fps)
+
+    # Opens the Video file with CV2
+    cap = cv2.VideoCapture(output_dir + "video_resized.mp4")
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    print("Generated Video fps: " + str(fps))
+    i = 0
+    while (cap.isOpened()):
+        ret, frame = cap.read()
+        if not ret:
+            break
+        fi_name = output_dir + 'kang' + f'{i:05d}' + '.jpg'
+        cv2.imwrite(fi_name, frame)
+        frames.append(fi_name)
+        if max_frames != -1 and i >= max_frames:
+            break
+        i += 1
+
+    cap.release()
+    cv2.destroyAllWindows()
+    os.remove(output_dir + "video_resized.mp4")
+
+    return frames, fps
+
+
+def img2img(id_task: str, mode: int, prompt: str, negative_prompt: str,
+            prompt_styles, init_img, sketch, init_img_with_mask, inpaint_color_sketch,
+            inpaint_color_sketch_orig, init_img_inpaint, init_mask_inpaint,
+            steps: int, sampler_index: int, mask_blur: int, mask_alpha: float, inpainting_fill: int,
+            restore_faces: bool, tiling: bool, n_iter: int, batch_size: int, cfg_scale: float, image_cfg_scale: float,
+            denoising_strength: float, seed: int, subseed: int, subseed_strength: float, seed_resize_from_h: int,
+            seed_resize_from_w: int, seed_enable_extras: bool,
+            height: int, width: int, resize_mode: int, inpaint_full_res: bool, inpaint_full_res_padding: int,
+            inpainting_mask_invert: int,
+            img2img_batch_input_dir: str, img2img_batch_output_dir: str, img2img_batch_input_video: str,
+            start_time: int, target_duration: int, target_fps: int,
+            img2img_batch_inpaint_mask_dir: str, override_settings_texts, *args):
     override_settings = create_override_settings_dict(override_settings_texts)
 
     is_batch = mode == 5
@@ -160,8 +222,20 @@ def img2img(id_task: str, mode: int, prompt: str, negative_prompt: str, prompt_s
     if is_batch:
         assert not shared.cmd_opts.hide_ui_dir_config, "Launched with --hide-ui-dir-config, batch img2img disabled"
 
-        process_batch(p, img2img_batch_input_dir, img2img_batch_output_dir, img2img_batch_inpaint_mask_dir, args)
 
+        fps = target_fps
+        if img2img_batch_input_video != "":
+            frames, fps = get_frames(img2img_batch_input_video, height, img2img_batch_input_dir,
+                                     start_time, target_duration, target_fps)
+            frames = process_batch(p, frames, img2img_batch_output_dir, img2img_batch_inpaint_mask_dir, args)
+
+        else:
+            frames = process_batch(p, img2img_batch_input_dir, img2img_batch_output_dir,
+                                   img2img_batch_inpaint_mask_dir, args)
+
+        if img2img_batch_input_video != "":
+            clip = ImageSequenceClip(frames, fps=fps)
+            clip.write_videofile(img2img_batch_output_dir + "img2img_video.mp4", fps=fps)
         processed = Processed(p, [], p.seed, "")
     else:
         processed = modules.scripts.scripts_img2img.run(p, *args)
